@@ -51,7 +51,11 @@ def get_question_by_id(q_id):
 def check_answer(user_answer, right_answer):
     # Requires revision
     right_answers = []
-    right_answers.append(re.findall(r"(.*?)[\.\(\!,]", right_answer)[0].strip())
+    try:
+        right_answers.append(re.findall(r"(.*?)[\.\(\!,]", right_answer)[0].strip())
+    except IndexError:
+        pass
+    
     right_answers.append(right_answer)
     if user_answer in right_answers:
         return True

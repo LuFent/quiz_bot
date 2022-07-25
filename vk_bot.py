@@ -9,12 +9,6 @@ import json
 import redis
 from tg_bot import get_question_by_id, check_answer, get_random_question
 
-REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
-REDIS_PORT = os.environ.get("REDIS_PORT", 6379)
-REDIS_DB_NUM = os.environ.get("REDIS_DB_NUM", 0)
-
-redis_db = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB_NUM)
-
 QUESTION, ANSWER, RETRY_QUESTION = range(3)
 
 
@@ -46,11 +40,7 @@ def send_random_question(vk_api, user_id):
     return f'{file_name}:{question_block["id"]}'
 
 
-def send_score(vk_api, user_id, keyboard):
-    # keyboard = VkKeyboard(one_time=True)
-    # keyboard.add_button("Новый вопрос", color=VkKeyboardColor.POSITIVE)
-    # keyboard.add_line()
-    # keyboard.add_button("Мой счет", color=VkKeyboardColor.PRIMARY)
+def send_score(vk_api, user_id, keyboard, redis_db):
     score = int(redis_db.get(f"{user_id}:vkscore"))
     vk_api.messages.send(
         user_id=user_id,
@@ -60,7 +50,7 @@ def send_score(vk_api, user_id, keyboard):
     )
 
 
-def give_up(vk_api, user_id):
+def give_up(vk_api, user_id, redis_db):
     keyboard = VkKeyboard(one_time=True)
     keyboard.add_button("Новый вопрос", color=VkKeyboardColor.POSITIVE)
     keyboard.add_line()
@@ -105,7 +95,7 @@ def decline_answer(vk_api, user_id):
     )
 
 
-def retry_question(vk_api, user_id):
+def retry_question(vk_api, user_id, redis_db):
     keyboard = VkKeyboard(one_time=True)
     keyboard.add_button("Мой счет", color=VkKeyboardColor.PRIMARY)
     keyboard.add_line()
@@ -121,7 +111,7 @@ def retry_question(vk_api, user_id):
     )
 
 
-def reply(event, vk_api):
+def reply(event, vk_api, redis_db):
     user_id = event.user_id
     bot_state = redis_db.get(f"{user_id}:vkstate")
     if not bot_state:
@@ -143,7 +133,7 @@ def reply(event, vk_api):
             keyboard.add_line()
             keyboard.add_button("Мой счет", color=VkKeyboardColor.PRIMARY)
 
-            send_score(vk_api, user_id, keyboard)
+            send_score(vk_api, user_id, keyboard, redis_db)
 
         return
 
@@ -154,10 +144,10 @@ def reply(event, vk_api):
             keyboard.add_line()
             keyboard.add_button("Сдаюсь", color=VkKeyboardColor.NEGATIVE)
 
-            send_score(vk_api, user_id, keyboard)
+            send_score(vk_api, user_id, keyboard, redis_db)
 
         elif event.text == "Сдаюсь":
-            give_up(vk_api, user_id)
+            give_up(vk_api, user_id, redis_db)
             redis_db.set(f"{user_id}:vkstate", QUESTION)
 
         else:
@@ -176,7 +166,7 @@ def reply(event, vk_api):
 
     if int(bot_state) == RETRY_QUESTION:
         if event.text == "Попробовать еще раз":
-            retry_question(vk_api, user_id)
+            retry_question(vk_api, user_id, redis_db)
             redis_db.set(f"{user_id}:vkstate", ANSWER)
 
         elif event.text == "Мой счет":
@@ -187,21 +177,27 @@ def reply(event, vk_api):
             keyboard.add_line()
             keyboard.add_button("Сдаюсь", color=VkKeyboardColor.NEGATIVE)
 
-            send_score(vk_api, user_id, keyboard)
+            send_score(vk_api, user_id, keyboard, redis_db)
 
         elif event.text == "Сдаюсь":
-            give_up(vk_api, user_id)
+            give_up(vk_api, user_id, redis_db)
             redis_db.set(f"{user_id}:vkstate", QUESTION)
 
 
 def main():
     load_dotenv()
     vk_session = VkApi(token=os.environ["VK_API_KEY"])
+    REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
+    REDIS_PORT = os.environ.get("REDIS_PORT", 6379)
+    REDIS_DB_NUM = os.environ.get("REDIS_DB_NUM", 0)
+
+    redis_db = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB_NUM)
+
     vk_api = vk_session.get_api()
     longpoll = VkLongPoll(vk_session)
     for event in longpoll.listen():
         if event.type == VkEventType.MESSAGE_NEW and event.to_me:
-            reply(event, vk_api)
+            reply(event, vk_api, redis_db)
 
 
 if __name__ == "__main__":

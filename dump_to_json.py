@@ -24,7 +24,7 @@ def normalize_questions(questions_text, start_id):
 def save_dict_as_json(dict_):
     file_name = f"q_{len(os.listdir('questions-json'))}.json"
 
-    with open(os.path.join('questions-json', file_name), "w") as fp:
+    with open(os.path.join("questions-json", file_name), "w") as fp:
         json.dump(dict_, fp, ensure_ascii=False, indent=4)
 
 

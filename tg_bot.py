@@ -59,7 +59,9 @@ def check_answer(user_answer, right_answer):
 
 
 def accept_answer(bot, update):
-    right_answer = get_question_by_id(redis_db.get(f"{update.message.chat_id}:tglast"))["answer"]
+    right_answer = get_question_by_id(redis_db.get(f"{update.message.chat_id}:tglast"))[
+        "answer"
+    ]
     result = check_answer(update.message.text, right_answer)
 
     if result:
@@ -89,7 +91,9 @@ def send_question(bot, update):
 
 
 def retry_question(bot, update):
-    question = get_question_by_id(redis_db.get(f"{update.message.chat_id}:tglast"))["question"]
+    question = get_question_by_id(redis_db.get(f"{update.message.chat_id}:tglast"))[
+        "question"
+    ]
     update.message.reply_text(text=question)
     return ANSWER
 

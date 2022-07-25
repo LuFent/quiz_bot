@@ -9,9 +9,6 @@ import json
 import redis
 from tg_bot import get_question_by_id, check_answer, get_random_question
 
-
-load_dotenv()
-
 REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
 REDIS_PORT = os.environ.get("REDIS_PORT", 6379)
 REDIS_DB_NUM = os.environ.get("REDIS_DB_NUM", 0)
@@ -192,6 +189,7 @@ def reply(event, vk_api):
 
 
 def main():
+    load_dotenv()
     vk_session = vk_api.VkApi(token=os.environ["VK_API_KEY"])
     vk_api = vk_session.get_api()
     longpoll = VkLongPoll(vk_session)

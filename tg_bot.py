@@ -21,8 +21,6 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-load_dotenv()
-
 REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
 REDIS_PORT = os.environ.get("REDIS_PORT", 6379)
 REDIS_DB_NUM = os.environ.get("REDIS_DB_NUM", 0)
@@ -125,6 +123,7 @@ def start(bot, update):
 
 
 def main():
+    load_dotenv()
     TG_API_TOKEN = os.environ["TG_API"]
     updater = Updater(TG_API_TOKEN)
     dp = updater.dispatcher

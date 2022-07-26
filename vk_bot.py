@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 import os
 import json
 import redis
-from tg_bot import get_question_by_id, check_answer, get_random_question
+from quiz_bot_funcs import get_question_by_id, check_answer, get_random_question
 
 QUESTION, ANSWER, RETRY_QUESTION = range(3)
 
@@ -24,20 +24,20 @@ def greeting(vk_api, user_id):
     )
 
 
-def send_random_question(vk_api, user_id):
+def send_random_question(vk_api, user_id, redis_db):
     keyboard = VkKeyboard(one_time=True)
     keyboard.add_button("Мой счет", color=VkKeyboardColor.PRIMARY)
     keyboard.add_line()
     keyboard.add_button("Сдаюсь", color=VkKeyboardColor.NEGATIVE)
 
-    question_block, file_name = get_random_question()
+    question_block = get_random_question(redis_db)
     vk_api.messages.send(
         user_id=user_id,
         message=question_block["question"],
         random_id=get_random_id(),
         keyboard=keyboard.get_keyboard(),
     )
-    return f'{file_name}:{question_block["id"]}'
+    return int(question_block["id"])
 
 
 def send_score(vk_api, user_id, keyboard, redis_db):
@@ -55,8 +55,8 @@ def give_up(vk_api, user_id, redis_db):
     keyboard.add_button("Новый вопрос", color=VkKeyboardColor.POSITIVE)
     keyboard.add_line()
     keyboard.add_button("Мой счет", color=VkKeyboardColor.PRIMARY)
-
-    answer = get_question_by_id(redis_db.get(f"{user_id}:vklast"))["answer"]
+    question_id = redis_db.get(f"{user_id}:vklast")
+    answer = get_question_by_id(redis_db, question_id)["answer"]
     vk_api.messages.send(
         user_id=user_id,
         message=f"Вы сдались ☹️ правильный ответ был:\n {answer}",
@@ -100,8 +100,8 @@ def retry_question(vk_api, user_id, redis_db):
     keyboard.add_button("Мой счет", color=VkKeyboardColor.PRIMARY)
     keyboard.add_line()
     keyboard.add_button("Сдаюсь", color=VkKeyboardColor.NEGATIVE)
-
-    question_block = get_question_by_id(redis_db.get(f"{user_id}:vklast"))
+    question_id = redis_db.get(f"{user_id}:vklast")
+    question_block = get_question_by_id(redis_db, question_id)
 
     vk_api.messages.send(
         user_id=user_id,
@@ -123,7 +123,7 @@ def reply(event, vk_api, redis_db):
 
     if int(bot_state) == QUESTION:
         if event.text == "Новый вопрос":
-            db_id = send_random_question(vk_api, user_id)
+            db_id = send_random_question(vk_api, user_id, redis_db)
             redis_db.set(f"{user_id}:vklast", db_id)
             redis_db.set(f"{user_id}:vkstate", ANSWER)
 
@@ -151,7 +151,9 @@ def reply(event, vk_api, redis_db):
             redis_db.set(f"{user_id}:vkstate", QUESTION)
 
         else:
-            answer = get_question_by_id(redis_db.get(f"{user_id}:vklast"))["answer"]
+            answer = get_question_by_id(redis_db, redis_db.get(f"{user_id}:vklast"))[
+                "answer"
+            ]
             result = check_answer(event.text, answer)
 
             if result:
@@ -191,7 +193,9 @@ def main():
     REDIS_PORT = os.environ.get("REDIS_PORT", 6379)
     REDIS_DB_NUM = os.environ.get("REDIS_DB_NUM", 0)
 
-    redis_db = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB_NUM)
+    redis_db = redis.Redis(
+        host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB_NUM, decode_responses=True
+    )
 
     vk_api = vk_session.get_api()
     longpoll = VkLongPoll(vk_session)

@@ -13,7 +13,7 @@ import re
 import json
 import logging
 import redis
-
+from quiz_bot_funcs import get_question_by_id, check_answer, get_random_question
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
@@ -30,42 +30,10 @@ redis_db = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB_NUM)
 QUESTION, ANSWER, RETRY_QUESTION = range(3)
 
 
-def get_random_question():
-    file_name = random.choice(os.listdir("questions-json"))
-
-    with open(os.path.join("questions-json", file_name)) as json_file:
-        questions = json.load(json_file)
-        question_block = random.choice(questions)
-        return question_block, file_name
-
-
-def get_question_by_id(q_id):
-    q_id = str(q_id).strip("'b")
-    file_name, user_question_id = q_id.split(":")
-    with open(os.path.join("questions-json", file_name)) as json_file:
-        questions = json.load(json_file)
-        question = [q for q in questions if q["id"] == int(user_question_id)][0]
-        return question
-
-
-def check_answer(user_answer, right_answer):
-    # Requires revision
-    right_answers = []
-    try:
-        right_answers.append(re.findall(r"(.*?)[\.\(\!,]", right_answer)[0].strip())
-    except IndexError:
-        pass
-    
-    right_answers.append(right_answer)
-    if user_answer in right_answers:
-        return True
-    return False
-
-
 def accept_answer(bot, update):
-    right_answer = get_question_by_id(redis_db.get(f"{update.message.chat_id}:tglast"))[
-        "answer"
-    ]
+    right_answer = get_question_by_id(
+        redis_db, redis_db.get(f"{update.message.chat_id}:tglast")
+    )["answer"]
     result = check_answer(update.message.text, right_answer)
 
     if result:
@@ -82,30 +50,28 @@ def accept_answer(bot, update):
 
 
 def send_question(bot, update):
-    question_block, file_name = get_random_question()
+    question_block = get_random_question(redis_db)
     question = question_block["question"]
 
     custom_keyboard = [["Сдаться"], ["Мой счёт"]]
     reply_markup = telegram.ReplyKeyboardMarkup(custom_keyboard)
     update.message.reply_text(text=question, reply_markup=reply_markup)
-    redis_db.set(
-        f"{update.message.chat_id}:tglast", f'{file_name}:{question_block["id"]}'
-    )
+    redis_db.set(f"{update.message.chat_id}:tglast", question_block["id"])
     return ANSWER
 
 
 def retry_question(bot, update):
-    question = get_question_by_id(redis_db.get(f"{update.message.chat_id}:tglast"))[
-        "question"
-    ]
+    question = get_question_by_id(
+        redis_db, redis_db.get(f"{update.message.chat_id}:tglast")
+    )["question"]
     update.message.reply_text(text=question)
     return ANSWER
 
 
 def give_up(bot, update):
-    answer = get_question_by_id(redis_db.get(f"{update.message.chat_id}:tglast"))[
-        "answer"
-    ]
+    answer = get_question_by_id(
+        redis_db, redis_db.get(f"{update.message.chat_id}:tglast")
+    )["answer"]
     custom_keyboard = [["Новый вопрос"], ["Мой счёт"]]
     reply_markup = telegram.ReplyKeyboardMarkup(custom_keyboard)
     update.message.reply_text(
@@ -146,6 +112,7 @@ def main():
             RETRY_QUESTION: [
                 MessageHandler(Filters.regex(r"Попробовать еще раз"), retry_question),
                 MessageHandler(Filters.regex(r"Мой счёт"), get_score),
+                MessageHandler(Filters.regex(r"Сдаться"), give_up),
             ],
             ANSWER: [
                 MessageHandler(Filters.regex(r"Сдаться"), give_up),

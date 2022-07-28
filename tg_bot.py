@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 QUESTION, ANSWER, RETRY_QUESTION = range(3)
 
+
 def accept_answer(bot, update, redis_db):
     right_answer = get_question_by_id(
         redis_db, redis_db.get(f"{update.message.chat_id}:tglast")
@@ -89,7 +90,8 @@ def start(bot, update, redis_db):
 
 def main():
     logging.basicConfig(
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        level=logging.INFO,
     )
     load_dotenv()
     TG_API_TOKEN = os.environ["TG_API"]
@@ -103,22 +105,37 @@ def main():
     updater = Updater(TG_API_TOKEN)
     dp = updater.dispatcher
 
-
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("start", partial(start, redis_db=redis_db))],
         states={
             QUESTION: [
-                MessageHandler(Filters.regex(r"Новый вопрос"), partial(send_question, redis_db=redis_db)),
-                MessageHandler(Filters.regex(r"Мой счёт"), partial(get_score, redis_db=redis_db)),
+                MessageHandler(
+                    Filters.regex(r"Новый вопрос"),
+                    partial(send_question, redis_db=redis_db),
+                ),
+                MessageHandler(
+                    Filters.regex(r"Мой счёт"), partial(get_score, redis_db=redis_db)
+                ),
             ],
             RETRY_QUESTION: [
-                MessageHandler(Filters.regex(r"Попробовать еще раз"), partial(retry_question, redis_db=redis_db)),
-                MessageHandler(Filters.regex(r"Мой счёт"), partial(get_score, redis_db=redis_db)),
-                MessageHandler(Filters.regex(r"Сдаться"), partial(give_up, redis_db=redis_db)),
+                MessageHandler(
+                    Filters.regex(r"Попробовать еще раз"),
+                    partial(retry_question, redis_db=redis_db),
+                ),
+                MessageHandler(
+                    Filters.regex(r"Мой счёт"), partial(get_score, redis_db=redis_db)
+                ),
+                MessageHandler(
+                    Filters.regex(r"Сдаться"), partial(give_up, redis_db=redis_db)
+                ),
             ],
             ANSWER: [
-                MessageHandler(Filters.regex(r"Сдаться"), partial(give_up, redis_db=redis_db)),
-                MessageHandler(Filters.regex(r"Мой счёт"), partial(get_score, redis_db=redis_db)),
+                MessageHandler(
+                    Filters.regex(r"Сдаться"), partial(give_up, redis_db=redis_db)
+                ),
+                MessageHandler(
+                    Filters.regex(r"Мой счёт"), partial(get_score, redis_db=redis_db)
+                ),
                 MessageHandler(Filters.text, partial(accept_answer, redis_db=redis_db)),
             ],
         },

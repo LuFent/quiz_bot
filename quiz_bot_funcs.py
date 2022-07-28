@@ -2,6 +2,7 @@ import os
 import random
 import re
 import json
+from contextlib import suppress
 
 
 def get_random_question(redis_db):
@@ -20,10 +21,8 @@ def get_question_by_id(redis_db, question_id):
 def check_answer(user_answer, right_answer):
     # Requires revision
     right_answers = []
-    try:
+    with suppress(IndexError):
         right_answers.append(re.findall(r"(.*?)[\.\(\!,]", right_answer)[0].strip())
-    except IndexError:
-        pass
 
     right_answers.append(right_answer)
 

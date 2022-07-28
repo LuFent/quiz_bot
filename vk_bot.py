@@ -118,7 +118,6 @@ def start(event, vk_api, redis_db):
     return QUESTION
 
 
-
 def handle_question(event, vk_api, redis_db):
     user_id = event.user_id
     if event.text == "Новый вопрос":
@@ -135,8 +134,6 @@ def handle_question(event, vk_api, redis_db):
         send_score(vk_api, user_id, keyboard, redis_db)
 
         return QUESTION
-
-
 
 
 def handle_answer(event, vk_api, redis_db):
@@ -167,8 +164,7 @@ def handle_answer(event, vk_api, redis_db):
 
         else:
             decline_answer(vk_api, user_id)
-            return  RETRY_QUESTION
-
+            return RETRY_QUESTION
 
 
 def handle_retry(event, vk_api, redis_db):
@@ -197,10 +193,8 @@ def handle_retry(event, vk_api, redis_db):
 def handle_unknown(event, vk_api, redis_db):
     user_id = event.user_id
     vk_api.messages.send(
-        user_id=user_id,
-        message="Неопознанная команда 🤷‍♂",
-        random_id=get_random_id()
-        )
+        user_id=user_id, message="Неопознанная команда 🤷‍♂", random_id=get_random_id()
+    )
 
 
 def reply(event, vk_api, redis_db):
@@ -211,7 +205,7 @@ def reply(event, vk_api, redis_db):
         None: start,
         QUESTION: handle_question,
         ANSWER: handle_answer,
-        RETRY_QUESTION: handle_retry
+        RETRY_QUESTION: handle_retry,
     }
     next_state = states[user_state](event, vk_api, redis_db)
 
@@ -220,7 +214,6 @@ def reply(event, vk_api, redis_db):
         return
 
     redis_db.set(f"{user_id}:vkstate", next_state)
-
 
 
 def main():

@@ -9,23 +9,23 @@ import json
 import redis
 from quiz_bot_funcs import get_question_by_id, check_answer, get_random_question
 
-QUESTION, ANSWER, RETRY_QUESTION = range(3)
+QUESTION, ANSWER, RETRY_QUESTION = map(str, range(3))
 
 
 def greeting(vk_api, user_id):
-    keyboard = VkKeyboard(one_time=True)
+    keyboard = VkKeyboard()
     keyboard.add_button("Новый вопрос", color=VkKeyboardColor.POSITIVE)
 
     vk_api.messages.send(
         user_id=user_id,
         random_id=get_random_id(),
         keyboard=keyboard.get_keyboard(),
-        message="Привет, я бот для викторины",
+        message="Привет, я бот для викторины 🖐🏻",
     )
 
 
 def send_random_question(vk_api, user_id, redis_db):
-    keyboard = VkKeyboard(one_time=True)
+    keyboard = VkKeyboard()
     keyboard.add_button("Мой счет", color=VkKeyboardColor.PRIMARY)
     keyboard.add_line()
     keyboard.add_button("Сдаюсь", color=VkKeyboardColor.NEGATIVE)
@@ -44,14 +44,14 @@ def send_score(vk_api, user_id, keyboard, redis_db):
     score = int(redis_db.get(f"{user_id}:vkscore"))
     vk_api.messages.send(
         user_id=user_id,
-        message=f"Вы ответили правильно на {score} вопросов",
+        message=f"Вы ответили правильно на {score} вопросов 🧠",
         random_id=get_random_id(),
         keyboard=keyboard.get_keyboard(),
     )
 
 
 def give_up(vk_api, user_id, redis_db):
-    keyboard = VkKeyboard(one_time=True)
+    keyboard = VkKeyboard()
     keyboard.add_button("Новый вопрос", color=VkKeyboardColor.POSITIVE)
     keyboard.add_line()
     keyboard.add_button("Мой счет", color=VkKeyboardColor.PRIMARY)
@@ -66,21 +66,21 @@ def give_up(vk_api, user_id, redis_db):
 
 
 def accept_answer(vk_api, user_id):
-    keyboard = VkKeyboard(one_time=True)
+    keyboard = VkKeyboard()
     keyboard.add_button("Новый вопрос", color=VkKeyboardColor.POSITIVE)
     keyboard.add_line()
     keyboard.add_button("Мой счет", color=VkKeyboardColor.PRIMARY)
 
     vk_api.messages.send(
         user_id=user_id,
-        message=f"Правильный ответ!",
+        message=f"Правильный ответ ✅",
         random_id=get_random_id(),
         keyboard=keyboard.get_keyboard(),
     )
 
 
 def decline_answer(vk_api, user_id):
-    keyboard = VkKeyboard(one_time=True)
+    keyboard = VkKeyboard()
     keyboard.add_button("Попробовать еще раз", color=VkKeyboardColor.POSITIVE)
     keyboard.add_line()
     keyboard.add_button("Мой счет", color=VkKeyboardColor.PRIMARY)
@@ -89,14 +89,14 @@ def decline_answer(vk_api, user_id):
 
     vk_api.messages.send(
         user_id=user_id,
-        message=f"Неправильный ответ",
+        message=f"Неправильный ответ 🚫",
         random_id=get_random_id(),
         keyboard=keyboard.get_keyboard(),
     )
 
 
 def retry_question(vk_api, user_id, redis_db):
-    keyboard = VkKeyboard(one_time=True)
+    keyboard = VkKeyboard()
     keyboard.add_button("Мой счет", color=VkKeyboardColor.PRIMARY)
     keyboard.add_line()
     keyboard.add_button("Сдаюсь", color=VkKeyboardColor.NEGATIVE)
@@ -111,79 +111,116 @@ def retry_question(vk_api, user_id, redis_db):
     )
 
 
-def reply(event, vk_api, redis_db):
+def start(event, vk_api, redis_db):
     user_id = event.user_id
-    bot_state = redis_db.get(f"{user_id}:vkstate")
-    if not bot_state:
-        greeting(vk_api, user_id)
+    greeting(vk_api, user_id)
+    redis_db.set(f"{user_id}:vkscore", 0)
+    return QUESTION
 
-        redis_db.set(f"{user_id}:vkstate", QUESTION)
-        redis_db.set(f"{user_id}:vkscore", 0)
-        return
 
-    if int(bot_state) == QUESTION:
-        if event.text == "Новый вопрос":
-            db_id = send_random_question(vk_api, user_id, redis_db)
-            redis_db.set(f"{user_id}:vklast", db_id)
-            redis_db.set(f"{user_id}:vkstate", ANSWER)
 
-        elif event.text == "Мой счет":
-            keyboard = VkKeyboard(one_time=True)
-            keyboard.add_button("Новый вопрос", color=VkKeyboardColor.POSITIVE)
-            keyboard.add_line()
-            keyboard.add_button("Мой счет", color=VkKeyboardColor.PRIMARY)
+def handle_question(event, vk_api, redis_db):
+    user_id = event.user_id
+    if event.text == "Новый вопрос":
+        db_id = send_random_question(vk_api, user_id, redis_db)
+        redis_db.set(f"{user_id}:vklast", db_id)
+        return ANSWER
 
-            send_score(vk_api, user_id, keyboard, redis_db)
+    elif event.text == "Мой счет":
+        keyboard = VkKeyboard()
+        keyboard.add_button("Новый вопрос", color=VkKeyboardColor.POSITIVE)
+        keyboard.add_line()
+        keyboard.add_button("Мой счет", color=VkKeyboardColor.PRIMARY)
 
-        return
+        send_score(vk_api, user_id, keyboard, redis_db)
 
-    if int(bot_state) == ANSWER:
-        if event.text == "Мой счет":
-            keyboard = VkKeyboard(one_time=True)
-            keyboard.add_button("Мой счет", color=VkKeyboardColor.PRIMARY)
-            keyboard.add_line()
-            keyboard.add_button("Сдаюсь", color=VkKeyboardColor.NEGATIVE)
+        return QUESTION
 
-            send_score(vk_api, user_id, keyboard, redis_db)
 
-        elif event.text == "Сдаюсь":
-            give_up(vk_api, user_id, redis_db)
-            redis_db.set(f"{user_id}:vkstate", QUESTION)
+
+
+def handle_answer(event, vk_api, redis_db):
+    user_id = event.user_id
+    if event.text == "Сдаюсь":
+        give_up(vk_api, user_id, redis_db)
+        return QUESTION
+
+    elif event.text == "Мой счет":
+        keyboard = VkKeyboard()
+        keyboard.add_button("Мой счет", color=VkKeyboardColor.PRIMARY)
+        keyboard.add_line()
+        keyboard.add_button("Сдаюсь", color=VkKeyboardColor.NEGATIVE)
+
+        send_score(vk_api, user_id, keyboard, redis_db)
+        return ANSWER
+
+    else:
+        answer = get_question_by_id(redis_db, redis_db.get(f"{user_id}:vklast"))[
+            "answer"
+        ]
+        result = check_answer(event.text, answer)
+
+        if result:
+            accept_answer(vk_api, user_id)
+            redis_db.incr(f"{user_id}:vkscore")
+            return QUESTION
 
         else:
-            answer = get_question_by_id(redis_db, redis_db.get(f"{user_id}:vklast"))[
-                "answer"
-            ]
-            result = check_answer(event.text, answer)
+            decline_answer(vk_api, user_id)
+            return  RETRY_QUESTION
 
-            if result:
-                accept_answer(vk_api, user_id)
-                redis_db.set(f"{user_id}:vkstate", QUESTION)
-                redis_db.incr(f"{user_id}:vkscore")
 
-            else:
-                decline_answer(vk_api, user_id)
-                redis_db.set(f"{user_id}:vkstate", RETRY_QUESTION)
+
+def handle_retry(event, vk_api, redis_db):
+    user_id = event.user_id
+    if event.text == "Попробовать еще раз":
+        retry_question(vk_api, user_id, redis_db)
+        return ANSWER
+
+    elif event.text == "Мой счет":
+        keyboard = VkKeyboard()
+        keyboard.add_button("Попробовать еще раз", color=VkKeyboardColor.POSITIVE)
+        keyboard.add_line()
+        keyboard.add_button("Мой счет", color=VkKeyboardColor.PRIMARY)
+        keyboard.add_line()
+        keyboard.add_button("Сдаюсь", color=VkKeyboardColor.NEGATIVE)
+
+        send_score(vk_api, user_id, keyboard, redis_db)
+
+        return RETRY_QUESTION
+
+    elif event.text == "Сдаюсь":
+        give_up(vk_api, user_id, redis_db)
+        return QUESTION
+
+
+def handle_unknown(event, vk_api, redis_db):
+    user_id = event.user_id
+    vk_api.messages.send(
+        user_id=user_id,
+        message="Неопознанная команда 🤷‍♂",
+        random_id=get_random_id()
+        )
+
+
+def reply(event, vk_api, redis_db):
+    user_id = event.user_id
+    user_state = redis_db.get(f"{user_id}:vkstate")
+
+    states = {
+        None: start,
+        QUESTION: handle_question,
+        ANSWER: handle_answer,
+        RETRY_QUESTION: handle_retry
+    }
+    next_state = states[user_state](event, vk_api, redis_db)
+
+    if not next_state:
+        handle_unknown(event, vk_api, redis_db)
         return
 
-    if int(bot_state) == RETRY_QUESTION:
-        if event.text == "Попробовать еще раз":
-            retry_question(vk_api, user_id, redis_db)
-            redis_db.set(f"{user_id}:vkstate", ANSWER)
+    redis_db.set(f"{user_id}:vkstate", next_state)
 
-        elif event.text == "Мой счет":
-            keyboard = VkKeyboard(one_time=True)
-            keyboard.add_button("Попробовать еще раз", color=VkKeyboardColor.POSITIVE)
-            keyboard.add_line()
-            keyboard.add_button("Мой счет", color=VkKeyboardColor.PRIMARY)
-            keyboard.add_line()
-            keyboard.add_button("Сдаюсь", color=VkKeyboardColor.NEGATIVE)
-
-            send_score(vk_api, user_id, keyboard, redis_db)
-
-        elif event.text == "Сдаюсь":
-            give_up(vk_api, user_id, redis_db)
-            redis_db.set(f"{user_id}:vkstate", QUESTION)
 
 
 def main():

@@ -15,9 +15,6 @@ import logging
 import redis
 from quiz_bot_funcs import get_question_by_id, check_answer, get_random_question
 
-logging.basicConfig(
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
-)
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +25,6 @@ REDIS_DB_NUM = os.environ.get("REDIS_DB_NUM", 0)
 redis_db = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB_NUM)
 
 QUESTION, ANSWER, RETRY_QUESTION = range(3)
-
 
 def accept_answer(bot, update):
     right_answer = get_question_by_id(
@@ -97,6 +93,9 @@ def start(bot, update):
 
 
 def main():
+    logging.basicConfig(
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
+    )
     load_dotenv()
     TG_API_TOKEN = os.environ["TG_API"]
     updater = Updater(TG_API_TOKEN)

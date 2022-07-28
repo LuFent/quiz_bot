@@ -14,19 +14,14 @@ import json
 import logging
 import redis
 from quiz_bot_funcs import get_question_by_id, check_answer, get_random_question
+from functools import partial
 
 
 logger = logging.getLogger(__name__)
 
-REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
-REDIS_PORT = os.environ.get("REDIS_PORT", 6379)
-REDIS_DB_NUM = os.environ.get("REDIS_DB_NUM", 0)
-
-redis_db = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB_NUM)
-
 QUESTION, ANSWER, RETRY_QUESTION = range(3)
 
-def accept_answer(bot, update):
+def accept_answer(bot, update, redis_db):
     right_answer = get_question_by_id(
         redis_db, redis_db.get(f"{update.message.chat_id}:tglast")
     )["answer"]
@@ -45,7 +40,7 @@ def accept_answer(bot, update):
     return RETRY_QUESTION
 
 
-def send_question(bot, update):
+def send_question(bot, update, redis_db):
     question_block = get_random_question(redis_db)
     question = question_block["question"]
 
@@ -56,7 +51,7 @@ def send_question(bot, update):
     return ANSWER
 
 
-def retry_question(bot, update):
+def retry_question(bot, update, redis_db):
     question = get_question_by_id(
         redis_db, redis_db.get(f"{update.message.chat_id}:tglast")
     )["question"]
@@ -64,7 +59,7 @@ def retry_question(bot, update):
     return ANSWER
 
 
-def give_up(bot, update):
+def give_up(bot, update, redis_db):
     answer = get_question_by_id(
         redis_db, redis_db.get(f"{update.message.chat_id}:tglast")
     )["answer"]
@@ -77,12 +72,12 @@ def give_up(bot, update):
     return QUESTION
 
 
-def get_score(bot, update):
+def get_score(bot, update, redis_db):
     score = int(redis_db.get(f"{update.message.chat_id}:tgscore"))
     update.message.reply_text(text=f"Вы ответили правильно на {score} вопросов")
 
 
-def start(bot, update):
+def start(bot, update, redis_db):
     custom_keyboard = [["Новый вопрос"], ["Мой счёт"]]
     reply_markup = telegram.ReplyKeyboardMarkup(custom_keyboard)
     update.message.reply_text(
@@ -98,25 +93,33 @@ def main():
     )
     load_dotenv()
     TG_API_TOKEN = os.environ["TG_API"]
+
+    REDIS_HOST = os.environ.get("REDIS_HOST", "localhost")
+    REDIS_PORT = os.environ.get("REDIS_PORT", 6379)
+    REDIS_DB_NUM = os.environ.get("REDIS_DB_NUM", 0)
+
+    redis_db = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB_NUM)
+
     updater = Updater(TG_API_TOKEN)
     dp = updater.dispatcher
 
+
     conv_handler = ConversationHandler(
-        entry_points=[CommandHandler("start", start)],
+        entry_points=[CommandHandler("start", partial(start, redis_db=redis_db))],
         states={
             QUESTION: [
-                MessageHandler(Filters.regex(r"Новый вопрос"), send_question),
-                MessageHandler(Filters.regex(r"Мой счёт"), get_score),
+                MessageHandler(Filters.regex(r"Новый вопрос"), partial(send_question, redis_db=redis_db)),
+                MessageHandler(Filters.regex(r"Мой счёт"), partial(get_score, redis_db=redis_db)),
             ],
             RETRY_QUESTION: [
-                MessageHandler(Filters.regex(r"Попробовать еще раз"), retry_question),
-                MessageHandler(Filters.regex(r"Мой счёт"), get_score),
-                MessageHandler(Filters.regex(r"Сдаться"), give_up),
+                MessageHandler(Filters.regex(r"Попробовать еще раз"), partial(retry_question, redis_db=redis_db)),
+                MessageHandler(Filters.regex(r"Мой счёт"), partial(get_score, redis_db=redis_db)),
+                MessageHandler(Filters.regex(r"Сдаться"), partial(give_up, redis_db=redis_db)),
             ],
             ANSWER: [
-                MessageHandler(Filters.regex(r"Сдаться"), give_up),
-                MessageHandler(Filters.regex(r"Мой счёт"), get_score),
-                MessageHandler(Filters.text, accept_answer),
+                MessageHandler(Filters.regex(r"Сдаться"), partial(give_up, redis_db=redis_db)),
+                MessageHandler(Filters.regex(r"Мой счёт"), partial(get_score, redis_db=redis_db)),
+                MessageHandler(Filters.text, partial(accept_answer, redis_db=redis_db)),
             ],
         },
         fallbacks=[],
